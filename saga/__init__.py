@@ -1,1 +1,4 @@
-"""Pacote de exemplo de Saga Pattern orientado a eventos."""
+"""Deprecated Python package.
+
+The active implementation is in Go under ./saga/*.go.
+"""

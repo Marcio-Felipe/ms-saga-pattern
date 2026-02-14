@@ -1,49 +1,49 @@
-# Exemplo robusto de Saga Pattern (Event-Driven)
+# Robust Saga Pattern Example (Event-Driven) in Go
 
-Este projeto mostra um **microserviço com Saga Pattern orientado a eventos**, simulando um fluxo de e-commerce com bastante observabilidade.
+This project demonstrates an **event-driven Saga Pattern** orchestration flow for an e-commerce checkout.
 
-## Cenário
+## Scenario
 
-Fluxo principal da saga (`OrderSaga`):
+Main saga flow (`OrderSaga`):
 
-1. Reservar estoque
-2. Cobrar pagamento
-3. Criar envio
-4. Confirmar pedido
+1. Reserve inventory
+2. Charge payment
+3. Create shipment
+4. Confirm order
 
-Quando há falha, a orquestração executa compensações:
+When a step fails, compensating actions are triggered:
 
-- Falha no pagamento -> libera estoque
-- Falha no envio -> estorna pagamento e libera estoque
-- Falha no estoque -> encerra sem compensação (nada foi comprometido antes)
+- Payment failure -> release inventory
+- Shipping failure -> refund payment and release inventory
+- Inventory failure -> stop without compensation (nothing committed yet)
 
-## Estrutura
+## Project Structure
 
-- `saga/event_bus.py`: barramento de eventos com histórico.
-- `saga/services.py`: serviços de Estoque, Pagamento e Envio.
-- `saga/orchestrator.py`: orquestrador da saga e lógica de compensação.
-- `demo.py`: execução manual com logs detalhados.
-- `tests/test_saga.py`: cenários de sucesso e falha.
+- `saga/event_bus.go`: event bus with in-memory event history.
+- `saga/services.go`: Inventory, Payment, and Shipping services.
+- `saga/orchestrator.go`: saga orchestration and compensation logic.
+- `cmd/demo/main.go`: manual run with scenario outputs.
+- `saga/orchestrator_test.go`: success and failure test scenarios.
 
-## Como rodar
-
-```bash
-python demo.py
-```
-
-## Como testar
+## Run the demo
 
 ```bash
-python -m unittest discover -s tests -v
+go run ./cmd/demo
 ```
 
-## Logs
+## Run tests
 
-O sistema gera logs detalhados para:
+```bash
+go test ./...
+```
 
-- publicação e consumo de eventos,
-- transição de estado da saga,
-- falhas de cada etapa,
-- compensações executadas.
+## Observability
 
-Isso ajuda a visualizar claramente o comportamento em sucesso e falha.
+The system emits logs for:
+
+- event publication and dispatch,
+- saga state transitions,
+- step failures,
+- compensations.
+
+This makes it easy to understand behavior in both success and failure paths.
