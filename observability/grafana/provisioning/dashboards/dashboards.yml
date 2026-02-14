@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: "Saga Dashboards"
+    orgId: 1
+    folder: "Saga"
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

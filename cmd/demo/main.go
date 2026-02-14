@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"time"
 
 	"ms-saga-pattern/saga"
 )
@@ -28,6 +30,27 @@ func buildTransport() saga.Transport {
 	return transport
 }
 
+func startMetricsServer() {
+	addr := os.Getenv("METRICS_ADDR")
+	if addr == "" {
+		addr = ":2112"
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", saga.DefaultMetrics.Handler())
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+
+	go func() {
+		log.Printf("metrics endpoint listening on %s", addr)
+		if err := http.ListenAndServe(addr, mux); err != nil {
+			log.Printf("metrics server stopped: %v", err)
+		}
+	}()
+}
+
 func runCase(title, orderID, sagaID string, failInventoryFor, failPaymentFor, failShippingFor map[string]bool, transport saga.Transport) {
 	fmt.Printf("\n%s\n%s\n", title, "================================================================================")
 	orchestrator, bus := saga.BuildOrchestrator(failInventoryFor, failPaymentFor, failShippingFor, transport)
@@ -43,10 +66,23 @@ func runCase(title, orderID, sagaID string, failInventoryFor, failPaymentFor, fa
 	fmt.Printf("- total_events: %d\n", len(bus.History()))
 }
 
+func runScenarios(transport saga.Transport) {
+	runCase("SCENARIO 1: SUCCESS", "ORDER-OK", fmt.Sprintf("SAGA-OK-%d", time.Now().UnixNano()), nil, nil, nil, transport)
+	runCase("SCENARIO 2: PAYMENT FAILURE (inventory compensation)", "ORDER-PAY-FAIL", fmt.Sprintf("SAGA-PAY-FAIL-%d", time.Now().UnixNano()), nil, map[string]bool{"ORDER-PAY-FAIL": true}, nil, transport)
+	runCase("SCENARIO 3: SHIPPING FAILURE (refund + release)", "ORDER-SHIP-FAIL", fmt.Sprintf("SAGA-SHIP-FAIL-%d", time.Now().UnixNano()), nil, nil, map[string]bool{"ORDER-SHIP-FAIL": true}, transport)
+	runCase("SCENARIO 4: INVENTORY FAILURE (no compensation)", "ORDER-INV-FAIL", fmt.Sprintf("SAGA-INV-FAIL-%d", time.Now().UnixNano()), map[string]bool{"ORDER-INV-FAIL": true}, nil, nil, transport)
+}
+
 func main() {
+	startMetricsServer()
 	transport := buildTransport()
-	runCase("SCENARIO 1: SUCCESS", "ORDER-OK", "SAGA-OK", nil, nil, nil, transport)
-	runCase("SCENARIO 2: PAYMENT FAILURE (inventory compensation)", "ORDER-PAY-FAIL", "SAGA-PAY-FAIL", nil, map[string]bool{"ORDER-PAY-FAIL": true}, nil, transport)
-	runCase("SCENARIO 3: SHIPPING FAILURE (refund + release)", "ORDER-SHIP-FAIL", "SAGA-SHIP-FAIL", nil, nil, map[string]bool{"ORDER-SHIP-FAIL": true}, transport)
-	runCase("SCENARIO 4: INVENTORY FAILURE (no compensation)", "ORDER-INV-FAIL", "SAGA-INV-FAIL", map[string]bool{"ORDER-INV-FAIL": true}, nil, nil, transport)
+	runScenarios(transport)
+
+	if os.Getenv("RUN_CONTINUOUS") == "true" {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			runScenarios(transport)
+		}
+	}
 }

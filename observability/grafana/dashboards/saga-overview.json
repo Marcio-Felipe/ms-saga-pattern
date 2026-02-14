@@ -1,0 +1,67 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
+      "targets": [{"expr": "sum(rate(saga_events_published_total[1m]))", "refId": "A"}],
+      "title": "Event Throughput (events/s)",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 2,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
+      "targets": [{"expr": "saga_started_total", "refId": "A"}],
+      "title": "Total Started Sagas",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 8},
+      "id": 3,
+      "targets": [
+        {"expr": "saga_completed_total", "legendFormat": "completed", "refId": "A"},
+        {"expr": "saga_failed_total", "legendFormat": "failed", "refId": "B"},
+        {"expr": "saga_failed_compensated_total", "legendFormat": "failed_compensated", "refId": "C"}
+      ],
+      "title": "Saga Outcomes",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 17},
+      "id": 4,
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum(rate(saga_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95", "refId": "A"},
+        {"expr": "histogram_quantile(0.50, sum(rate(saga_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p50", "refId": "B"}
+      ],
+      "title": "Saga Duration",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["saga", "go", "observability"],
+  "templating": {"list": []},
+  "time": {"from": "now-15m", "to": "now"},
+  "timepicker": {},
+  "timezone": "",
+  "title": "Saga Overview",
+  "uid": "saga-overview",
+  "version": 1,
+  "weekStart": ""
+}

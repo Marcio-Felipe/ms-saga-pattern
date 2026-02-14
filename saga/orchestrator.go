@@ -3,16 +3,23 @@ package saga
 import (
 	"fmt"
 	"log/slog"
+	"time"
 )
 
 type OrderSagaOrchestrator struct {
-	bus     *EventBus
-	logger  *slog.Logger
-	results map[string]*SagaResult
+	bus        *EventBus
+	logger     *slog.Logger
+	results    map[string]*SagaResult
+	startTimes map[string]time.Time
 }
 
 func NewOrderSagaOrchestrator(bus *EventBus, logger *slog.Logger) *OrderSagaOrchestrator {
-	o := &OrderSagaOrchestrator{bus: bus, logger: logger, results: map[string]*SagaResult{}}
+	o := &OrderSagaOrchestrator{
+		bus:        bus,
+		logger:     logger,
+		results:    map[string]*SagaResult{},
+		startTimes: map[string]time.Time{},
+	}
 	bus.Subscribe("inventory.reserved", o.onInventoryReserved)
 	bus.Subscribe("inventory.reserve.failed", o.onInventoryFailed)
 	bus.Subscribe("payment.charged", o.onPaymentCharged)
@@ -27,6 +34,9 @@ func NewOrderSagaOrchestrator(bus *EventBus, logger *slog.Logger) *OrderSagaOrch
 func (o *OrderSagaOrchestrator) Start(orderID string, quantity int, amount float64, address string, sagaID string) *SagaResult {
 	result := &SagaResult{SagaID: sagaID, Status: StatusStarted}
 	o.results[sagaID] = result
+	o.startTimes[sagaID] = time.Now()
+	DefaultMetrics.ObserveSagaStarted()
+
 	o.appendStep(sagaID, "SAGA_STARTED")
 	o.bus.MustPublish(Event{Name: "inventory.reserve.requested", SagaID: sagaID, Payload: map[string]any{"order_id": orderID, "quantity": quantity, "amount": amount, "address": address}})
 	return o.results[sagaID]
@@ -45,6 +55,7 @@ func (o *OrderSagaOrchestrator) onInventoryFailed(event Event) {
 	result.Status = StatusFailed
 	result.Errors = append(result.Errors, event.Payload["error"].(string))
 	o.appendStep(event.SagaID, "INVENTORY_FAILED")
+	o.observeTerminal(event.SagaID, StatusFailed)
 }
 
 func (o *OrderSagaOrchestrator) onPaymentCharged(event Event) {
@@ -67,6 +78,7 @@ func (o *OrderSagaOrchestrator) onShippingCreated(event Event) {
 	result.Status = StatusCompleted
 	o.appendStep(event.SagaID, "SHIPPING_CREATED")
 	o.appendStep(event.SagaID, "SAGA_COMPLETED")
+	o.observeTerminal(event.SagaID, StatusCompleted)
 	o.logger.Info("saga_completed", "saga_id", event.SagaID, "tracking_id", event.Payload["tracking_id"])
 }
 
@@ -122,6 +134,7 @@ func (o *OrderSagaOrchestrator) refreshFailedCompensated(sagaID string) {
 		if hasRelease && hasRefund {
 			result.Status = StatusFailedCompensated
 			o.appendStep(sagaID, "SAGA_FAILED_COMPENSATED")
+			o.observeTerminal(sagaID, StatusFailedCompensated)
 		}
 		return
 	}
@@ -129,7 +142,17 @@ func (o *OrderSagaOrchestrator) refreshFailedCompensated(sagaID string) {
 	if hasRelease {
 		result.Status = StatusFailedCompensated
 		o.appendStep(sagaID, "SAGA_FAILED_COMPENSATED")
+		o.observeTerminal(sagaID, StatusFailedCompensated)
 	}
+}
+
+func (o *OrderSagaOrchestrator) observeTerminal(sagaID string, status SagaStatus) {
+	start, ok := o.startTimes[sagaID]
+	if !ok {
+		return
+	}
+	DefaultMetrics.ObserveSagaResult(status, time.Since(start))
+	delete(o.startTimes, sagaID)
 }
 
 func contains(items []string, target string) bool {

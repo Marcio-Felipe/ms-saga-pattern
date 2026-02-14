@@ -61,6 +61,7 @@ func (b *EventBus) Publish(event Event) error {
 		handler(event)
 	}
 
+	DefaultMetrics.ObserveEventPublished(event.Name)
 	if err := b.transport.Publish(event); err != nil {
 		return fmt.Errorf("publish to transport: %w", err)
 	}
