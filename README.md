@@ -1,49 +1,55 @@
-# Exemplo robusto de Saga Pattern (Event-Driven)
+# Saga Pattern in Go with RabbitMQ Integration
 
-Este projeto mostra um **microserviço com Saga Pattern orientado a eventos**, simulando um fluxo de e-commerce com bastante observabilidade.
+This repository is now **100% Go** and demonstrates an event-driven Saga Pattern for e-commerce checkout.
 
-## Cenário
+## Flow
 
-Fluxo principal da saga (`OrderSaga`):
+`OrderSaga` happy-path:
 
-1. Reservar estoque
-2. Cobrar pagamento
-3. Criar envio
-4. Confirmar pedido
+1. Reserve inventory
+2. Charge payment
+3. Create shipment
+4. Complete saga
 
-Quando há falha, a orquestração executa compensações:
+Compensations on failures:
 
-- Falha no pagamento -> libera estoque
-- Falha no envio -> estorna pagamento e libera estoque
-- Falha no estoque -> encerra sem compensação (nada foi comprometido antes)
+- Payment failure -> release inventory
+- Shipping failure -> refund payment + release inventory
+- Inventory failure -> fail directly (nothing to compensate)
 
-## Estrutura
+## Project Structure
 
-- `saga/event_bus.py`: barramento de eventos com histórico.
-- `saga/services.py`: serviços de Estoque, Pagamento e Envio.
-- `saga/orchestrator.py`: orquestrador da saga e lógica de compensação.
-- `demo.py`: execução manual com logs detalhados.
-- `tests/test_saga.py`: cenários de sucesso e falha.
+- `saga/models.go`: saga entities and statuses.
+- `saga/event_bus.go`: in-process event bus + transport abstraction.
+- `saga/transport_memory.go`: in-memory transport (default for tests/dev).
+- `saga/transport_rabbitmq.go`: RabbitMQ publish integration via Management HTTP API.
+- `saga/services.go`: inventory, payment and shipping services.
+- `saga/orchestrator.go`: saga orchestration and compensation logic.
+- `saga/orchestrator_test.go`: unit tests for success/failure scenarios.
+- `cmd/demo/main.go`: executable demo.
 
-## Como rodar
-
-```bash
-python demo.py
-```
-
-## Como testar
+## Run tests
 
 ```bash
-python -m unittest discover -s tests -v
+go test ./...
 ```
 
-## Logs
+## Run demo (in-memory)
 
-O sistema gera logs detalhados para:
+```bash
+go run ./cmd/demo
+```
 
-- publicação e consumo de eventos,
-- transição de estado da saga,
-- falhas de cada etapa,
-- compensações executadas.
+## Run demo with RabbitMQ
 
-Isso ajuda a visualizar claramente o comportamento em sucesso e falha.
+The demo publishes every event to RabbitMQ using the Management HTTP API while still processing the saga locally.
+
+```bash
+export RABBITMQ_HTTP_URL="http://localhost:15672"
+export RABBITMQ_USERNAME="guest"
+export RABBITMQ_PASSWORD="guest"
+export RABBITMQ_VHOST="/"
+go run ./cmd/demo
+```
+
+> Requirements: RabbitMQ Management Plugin enabled and an exchange named `saga.events` available (type `topic`).
